@@ -1,0 +1,16 @@
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+node_modules/
+.idea/
+.vscode/
+*.log
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+.env
+db.sqlite3

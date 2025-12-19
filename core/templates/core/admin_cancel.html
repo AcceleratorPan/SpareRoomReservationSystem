@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>管理员取消预约</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #eee; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #c62828; padding-bottom: 10px;}
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; background: #f9f9f9; padding: 10px; border-radius: 6px;}
+
+        .grid-wrapper { 
+            overflow-x: auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .row { display: flex; gap: 6px; margin-bottom: 6px; }
+        .cell { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 11px; cursor: default; }
+        
+        .aisle { background: transparent; }
+        .seat.free { background: #e0e0e0; color: #999; cursor: not-allowed; }
+        
+        /* 可取消的座位（已预约） */
+        .seat.approved { background: #4CAF50; color: white; cursor: pointer; }
+        .seat.approved:hover { background: #388E3C; }
+        .seat.pending { background: #FF9800; color: white; cursor: pointer; }
+        .seat.pending:hover { background: #F57C00; }
+        
+        /* 选中待取消（红色） */
+        .seat.selected { background: #c62828 !important; color: white; border: 2px solid #b71c1c; }
+
+        .tooltip { font-size: 10px; text-align: center; line-height: 1.1; }
+        .nav-btn {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #1976D2;
+            color: white;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 13px;
+            margin-right: 8px;
+        }
+        .nav-btn:hover { background: #1565C0; }
+        .nav-btn.danger { background: #c62828; }
+        .nav-btn.danger:hover { background: #b71c1c; }
+
+        .podium { 
+            width: 160px; height: 34px; 
+            background: #FF9800; color: white; 
+            border-radius: 6px; 
+            display: flex; align-items: center; justify-content: center; 
+            font-weight: 700; margin: 8px auto 14px auto; 
+            box-shadow: 0 2px 6px rgba(255,152,0,0.25);
+        }
+
+        .legend { margin-top: 15px; display: flex; gap: 15px; font-size: 12px; color: #666; justify-content: center; flex-wrap: wrap;}
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .dot { width: 12px; height: 12px; border-radius: 3px; }
+
+        .msg { padding: 10px; border-radius: 5px; margin-bottom: 10px; font-size: 14px;}
+        .msg.error { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2;}
+        .msg.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9;}
+        .msg.warning { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2;}
+
+        .time-warning { 
+            background: #fff3e0; 
+            border: 1px solid #ffcc02; 
+            padding: 10px; 
+            border-radius: 6px; 
+            margin-bottom: 15px; 
+            font-size: 13px;
+            color: #e65100;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-bar">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <a href="{% url 'admin_booking' %}" class="nav-btn">← 添加预约</a>
+                <h2 style="margin:0; color:#c62828;">🚫 管理员取消预约</h2>
+            </div>
+            <a href="/admin/">返回 Django 后台</a>
+        </div>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="msg {% if message.tags %}{{ message.tags }}{% endif %}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        {% if not can_cancel %}
+            <div class="time-warning">
+                ⚠️ <strong>当前时间段无法取消预约</strong>：只能在时间段开始前 {{ cancel_window_minutes }} 分钟之前取消。
+                该时间段将于 {{ slot_start_time }} 开始。
+            </div>
+        {% endif %}
+
+        <form method="POST" id="adminCancelForm">
+            {% csrf_token %}
+
+            <div class="controls">
+                <select onchange="updateParam('classroom_id', this.value)">
+                    {% for c in classrooms %}
+                        <option value="{{ c.id }}" {% if c.id == curr_cls.id %}selected{% endif %}>{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="date" value="{{ date }}" onchange="updateParam('date', this.value)" min="{{ today }}">
+                <select onchange="updateParam('slot', this.value)">
+                    {% for id, name in time_slots %}
+                        <option value="{{ id }}" {% if id == current_slot %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <p style="color:#666; font-size:13px; margin-bottom:15px;">
+                💡 点击已预约的座位（绿色/橙色）选择要取消的预约，选中的座位会变成红色。
+            </p>
+
+            <div class="grid-wrapper">
+                <div class="podium">讲台</div>
+                <div style="display: flex; flex-direction: column;">
+                    {% for row in matrix %}
+                        <div class="row">
+                            {% for cell in row %}
+                                {% if cell.type == 'seat' %}
+                                    {% if cell.status == 'free' %}
+                                        <div class="cell seat free">
+                                            {{ cell.r|add:1 }}-{{ cell.c|add:1 }}
+                                        </div>
+                                    {% elif cell.status == 'approved' %}
+                                        <div class="cell seat approved" 
+                                            id="seat-{{ cell.r }}-{{ cell.c }}" 
+                                            data-res-id="{{ cell.res_id }}"
+                                            data-student="{{ cell.student_id }}"
+                                            onclick="toggleSeat({{ cell.r }}, {{ cell.c }}, '{{ cell.res_id }}')"
+                                            title="{{ cell.info }}">
+                                            <div class="tooltip">{{ cell.student_id|slice:":6" }}</div>
+                                        </div>
+                                    {% else %}
+                                        <div class="cell seat pending" 
+                                            id="seat-{{ cell.r }}-{{ cell.c }}" 
+                                            data-res-id="{{ cell.res_id }}"
+                                            data-student="{{ cell.student_id }}"
+                                            onclick="toggleSeat({{ cell.r }}, {{ cell.c }}, '{{ cell.res_id }}')"
+                                            title="{{ cell.info }}">
+                                            <div class="tooltip">{{ cell.student_id|slice:":6" }}</div>
+                                        </div>
+                                    {% endif %}
+                                {% else %}
+                                    <div class="cell aisle"></div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item"><div class="dot" style="background:#e0e0e0"></div>空闲</div>
+                <div class="legend-item"><div class="dot" style="background:#4CAF50"></div>已通过</div>
+                <div class="legend-item"><div class="dot" style="background:#FF9800"></div>待审核</div>
+                <div class="legend-item"><div class="dot" style="background:#c62828"></div>待取消</div>
+            </div>
+            
+            <input type="hidden" name="reservation_ids" id="reservationIds">
+            
+            <div style="margin-top:20px; display:flex; gap:10px; align-items:center;">
+                <button type="button" onclick="submitCancel()" class="nav-btn danger" style="padding:12px 24px; font-size:16px;" {% if not can_cancel %}disabled style="opacity:0.5;cursor:not-allowed;"{% endif %}>
+                    🚫 取消选中的预约
+                </button>
+                <span id="selectedCount" style="color:#666; font-size:14px;">已选择 0 个座位</span>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        let selectedReservations = new Map(); // res_id -> {r, c, student_id}
+        const canCancel = {{ can_cancel|yesno:"true,false" }};
+
+        function updateParam(k, v) {
+            let u = new URL(window.location);
+            u.searchParams.set(k, v);
+            window.location = u;
+        }
+
+        function toggleSeat(r, c, resId) {
+            if (!canCancel) {
+                alert('当前时间段无法取消预约：已超过取消时限。');
+                return;
+            }
+            
+            let key = `${r}-${c}`;
+            let el = document.getElementById(`seat-${key}`);
+            
+            if (selectedReservations.has(resId)) {
+                selectedReservations.delete(resId);
+                el.classList.remove('selected');
+            } else {
+                selectedReservations.set(resId, {r, c, student: el.dataset.student});
+                el.classList.add('selected');
+            }
+            updateCount();
+        }
+
+        function updateCount() {
+            document.getElementById('selectedCount').innerText = `已选择 ${selectedReservations.size} 个座位`;
+        }
+
+        function submitCancel() {
+            if (!canCancel) {
+                alert('当前时间段无法取消预约：已超过取消时限。');
+                return;
+            }
+            if (selectedReservations.size === 0) { 
+                alert("请至少选择一个要取消的座位！"); 
+                return; 
+            }
+            
+            // 统计涉及的学生
+            let students = new Set();
+            selectedReservations.forEach((val, key) => {
+                students.add(val.student);
+            });
+            
+            let confirmMsg = `确定要取消这 ${selectedReservations.size} 个座位的预约吗？\n\n涉及 ${students.size} 位用户，系统将发送邮件通知他们。`;
+            
+            if (confirm(confirmMsg)) {
+                document.getElementById('reservationIds').value = Array.from(selectedReservations.keys()).join(',');
+                document.getElementById('adminCancelForm').submit();
+            }
+        }
+    </script>
+</body>
+</html>

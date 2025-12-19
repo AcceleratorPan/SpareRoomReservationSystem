@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>信息</title>
+    <style>
+        html,body{height:100%;margin:0}
+        body{display:flex;align-items:center;justify-content:center;background:#f5f6f8;font-family:Arial,Helvetica,sans-serif}
+        .card{background:white;padding:30px 24px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.08);text-align:center;max-width:720px}
+        .message{font-size:20px;color:#222;margin-bottom:12px;padding:12px;border-radius:6px}
+        .message.success{background:#e8f5e9;color:#1b5e20}
+        .message.error{background:#ffebee;color:#b71c1c}
+        .countdown{color:#666;font-size:14px}
+        .btn{display:inline-block;margin-top:14px;padding:8px 14px;background:#1976D2;color:#fff;border-radius:6px;text-decoration:none}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="message {% if status_type %}{{ status_type }}{% endif %}">{{ message|safe }}</div>
+        <div class="countdown">页面将在 <span id="sec">5</span> 秒后返回上一页</div>
+        <div>
+            {% if next_url %}
+                <a id="btn" class="btn" href="{{ next_url }}">立即返回</a>
+            {% else %}
+                <a id="btn" class="btn" href="#" onclick="history.back();return false;">立即返回</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        (function(){
+            var s = 5;
+            var el = document.getElementById('sec');
+            var next = "{{ next_url }}";
+            var timer = setInterval(function(){
+                s -= 1; if(s<0) s=0;
+                el.textContent = s;
+                if(s === 0){
+                    clearInterval(timer);
+                    if(next && next !== ''){
+                        window.location.href = next;
+                    } else {
+                        history.back();
+                    }
+                }
+            }, 1000);
+        })();
+    </script>
+</body>
+</html>

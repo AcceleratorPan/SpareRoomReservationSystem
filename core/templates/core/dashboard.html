@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><title>管理员看板</title></head>
+<body>
+    <h1>{{ classroom.name }} - 座位热力图</h1>
+    <p>颜色越深，代表该座位被预约成功的次数越多。</p>
+    
+    <div style="display: grid; grid-template-columns: repeat({{ classroom.cols }}, 60px); gap: 5px;">
+        {% for row in grid %}
+            {% for seat in row %}
+                <div style="
+                    width: 60px; height: 60px; border: 1px solid #ccc;
+                    background-color: rgba(255, 0, 0, {{ seat.opacity }});
+                    display: flex; align-items: center; justify-content: center;
+                ">
+                    {{ seat.count }}次
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+</body>
+</html>

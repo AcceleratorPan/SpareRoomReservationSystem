@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>智能选座系统</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <style>
+        /* --- 全局布局 --- */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            padding: 20px; 
+            padding-bottom: 90px; /* 为底部栏留空 */
+            background-color: #f5f5f5;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* --- 顶部用户信息栏 --- */
+        .header { 
+            background: white; 
+            padding: 15px; 
+            border-radius: 12px; 
+            margin-bottom: 15px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+        }
+        .user-info strong { font-size: 18px; color: #333; }
+        .role-badge { 
+            font-size: 12px; 
+            padding: 3px 8px; 
+            border-radius: 4px; 
+            color: white; 
+            margin-left: 8px; 
+            vertical-align: middle;
+        }
+        .role-user { background: #999; }
+        .role-manager { background: #E91E63; }
+
+        .nav-links a { 
+            text-decoration: none; 
+            color: #007bff; 
+            font-size: 14px; 
+            margin-left: 15px; 
+            font-weight: 500;
+        }
+        .logout-btn {
+            display: inline-block;
+            padding: 6px 10px;
+            background: #e53935;
+            color: white;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .logout-btn:hover { background: #c62828; }
+
+        /* --- 筛选控件栏 --- */
+        .controls { 
+            background: white; 
+            padding: 15px; 
+            border-radius: 12px; 
+            margin-bottom: 20px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex; 
+            gap: 10px; 
+            flex-wrap: wrap;
+        }
+        select, input[type="date"] { 
+            padding: 10px; 
+            border: 1px solid #ddd; 
+            border-radius: 6px; 
+            background: white;
+            font-size: 14px;
+            flex: 1; /* 手机端自动撑开 */
+            min-width: 120px;
+        }
+
+        /* --- 座位矩阵容器 --- */
+        .grid-wrapper { 
+            overflow-x: auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex; 
+            flex-direction: column; /* 纵向排列：讲台在上方 */
+            align-items: center; /* 居中显示 */
+        }
+        .grid-container { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 8px; 
+        }
+        .row { display: flex; gap: 8px; }
+
+        /* --- 核心：座位样式 --- */
+        .cell { 
+            width: 44px; height: 44px; 
+            display: flex; align-items: center; justify-content: center; 
+            border-radius: 8px; 
+            font-size: 12px; font-weight: bold; 
+            transition: all 0.2s;
+            user-select: none;
+            position: relative; /* 方便定位角标 */
+        }
+
+        /* 类型：过道 */
+        .aisle { background: transparent; pointer-events: none; }
+
+        /* 类型：座位 */
+        .seat { color: white; border: 2px solid transparent; box-sizing: border-box; }
+
+        /* 状态 1: 空闲 (可点) */
+        .seat.free { 
+            background: #e0e0e0; 
+            color: #666; 
+            cursor: pointer; 
+        }
+        .seat.free:active { transform: scale(0.95); }
+
+        /* 状态 2: 选中 (绿色) */
+        .seat.selected { 
+            background: #4CAF50 !important; 
+            color: white !important; 
+            border-color: #2E7D32 !important;
+            box-shadow: 0 4px 6px rgba(76, 175, 80, 0.3);
+        }
+
+        /* 状态 3: 别人已获批 (红色锁死) */
+        .seat.approved { 
+            background: #FF5252; 
+            cursor: not-allowed; 
+            opacity: 0.9;
+        }
+
+        /* 状态 4: 我申请中/我已获批 (蓝色) */
+        .seat.mine { 
+            background: #2196F3; 
+            cursor: default; 
+            border: 2px solid #1976D2;
+        }
+        /* 区分 Pending 和 Approved */
+        .seat.mine.pending { 
+            background: #64B5F6; 
+            border-style: dashed; 
+        }
+
+        /* 状态 5: 别人申请中 (橙色 - 可抢!) */
+        .seat.other_pending { 
+            background: #FF9800; 
+            color: white;
+            cursor: pointer;
+        }
+        /* 角标提示 */
+        .seat.other_pending::after {
+            content: "抢";
+            position: absolute;
+            top: -6px; right: -6px;
+            background: #D32F2F;
+            color: white;
+            font-size: 9px;
+            padding: 2px 4px;
+            border-radius: 10px;
+            border: 1px solid white;
+            transform: scale(0.9);
+        }
+
+        /* --- 底部图例 --- */
+        .legend { margin-top: 15px; display: flex; gap: 15px; font-size: 12px; color: #666; justify-content: center; flex-wrap: wrap;}
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .dot { width: 12px; height: 12px; border-radius: 3px; }
+
+        /* --- 底部悬浮提交栏 --- */
+        .bottom-bar {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: white;
+            padding: 15px 20px;
+            border-top: 1px solid #eee;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            z-index: 1000;
+        }
+        .status-text { font-size: 14px; color: #333; font-weight: bold;}
+        .btn-submit {
+            background: #212121;
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-submit:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-submit:not(:disabled):hover { background: #000; }
+
+        /* 讲台样式：页面上方的橙色矩形标签 */
+        .podium { 
+            width: 140px; height: 34px; 
+            background: #FF9800; color: white; 
+            border-radius: 6px; 
+            display: flex; align-items: center; justify-content: center; 
+            font-weight: 700; margin: 8px auto 14px auto; 
+            box-shadow: 0 2px 6px rgba(255,152,0,0.25);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <a href="{% url 'logout' %}" class="logout-btn">登出</a>
+            <div class="user-info">
+                <strong id="user-name" data-role="{{ student.role }}">{{ student.student_id }}</strong>
+                {% if student.role != 'user' %}
+                    <span class="role-badge role-{{ student.role }}">
+                        {{ student.get_role_display }}
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="nav-links">
+            <a href="{% url 'my_bookings' %}">📅 我的预约</a>
+            {% if student.role == 'user' and promotion_show_button %}
+                <a href="{% url 'apply_promotion' %}">⚡️ 申请升级</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="controls">
+        <select onchange="updateParam('classroom_id', this.value)">
+            {% for c in classrooms %}
+                <option value="{{ c.id }}" {% if c.id == curr_cls.id %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+
+        <input type="date" value="{{ date }}" onchange="updateParam('date', this.value)" min="{{ today }}" max="{{ max_date }}">
+
+        <select onchange="updateParam('slot', this.value)">
+            {% for id, name in time_slots %}
+                <option value="{{ id }}" {% if id == current_slot %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="grid-wrapper">
+        <div class="podium">讲台</div>
+        <div class="grid-container">
+            {% for row in matrix %}
+                <div class="row">
+                    {% for cell in row %}
+                        
+                        {% if cell.type == 'aisle' %}
+                            <div class="cell aisle"></div>
+                        
+                        {% else %}
+                               {% if cell.is_mine %}
+                                  <div class="cell seat mine{% if cell.other_pending %} other_pending{% endif %} {% if cell.status == 'pending' %}pending{% endif %}"
+                                      title="我的座位">
+                                      {% if cell.status == 'approved' %}我{% else %}审{% endif %}
+                                  </div>
+                            
+                            {% elif cell.status == 'approved' %}
+                                <div class="cell seat approved" title="已被占用">占</div>
+
+                            {% elif cell.status == 'other_pending' %}
+                                <div class="cell seat other_pending" 
+                                     id="seat-{{ cell.r }}-{{ cell.c }}"
+                                     onclick="toggleSeat({{ cell.r }}, {{ cell.c }})">
+                                     {{ cell.r|add:1 }}-{{ cell.c|add:1 }}
+                                </div>
+
+                            {% else %}
+                                <div class="cell seat free" 
+                                     id="seat-{{ cell.r }}-{{ cell.c }}"
+                                     onclick="toggleSeat({{ cell.r }}, {{ cell.c }})">
+                                     {{ cell.r|add:1 }}-{{ cell.c|add:1 }}
+                                </div>
+                            {% endif %}
+                        
+                        {% endif %}
+                        {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="dot" style="background:#e0e0e0"></div>空闲</div>
+        <div class="legend-item"><div class="dot" style="background:#4CAF50"></div>已选</div>
+        <div class="legend-item"><div class="dot" style="background:#2196F3"></div>我的</div>
+        <div class="legend-item"><div class="dot" style="background:#FF9800"></div>竞争中(可抢)</div>
+        <div class="legend-item"><div class="dot" style="background:#FF5252"></div>已占</div>
+    </div>
+
+    <div class="bottom-bar">
+        <div class="status-text" id="status-text">请选择座位</div>
+        <button id="submit-btn" class="btn-submit" onclick="submitBooking()" disabled>提交申请</button>
+    </div>
+
+    <form id="bookForm" action="{% url 'submit' %}" method="POST" style="display:none;">
+        {% csrf_token %}
+        <input name="cid" value="{{ curr_cls.id }}">
+        <input name="date" value="{{ date }}">
+        <input name="slot" value="{{ current_slot }}">
+        <input name="seats_list" id="seatsInput">
+    </form>
+        <script>
+            (function(){
+                const nameEl = document.getElementById('user-name');
+                if (!nameEl) return;
+                const KEY = 'booking_user_clicks';
+                // 使用 sessionStorage，使计数在同一标签页有效，关闭页面后重置
+                function getCount(){
+                    const v = sessionStorage.getItem(KEY);
+                    return v ? parseInt(v,10) : 0;
+                }
+                function setCount(n){ sessionStorage.setItem(KEY, String(n)); }
+
+                const role = nameEl.dataset.role || '';
+                // 如果当前用户已经是负责人，禁用 10 次点击入口
+                if (role === 'manager') return;
+
+                {% if promotion_enable_10click %}
+                nameEl.style.cursor = 'pointer';
+                nameEl.addEventListener('click', function(e){
+                    let c = getCount() + 1;
+                    setCount(c);
+                    if (c >= 10){
+                        // 触发升级，清空计数并跳转到申请升级路由
+                        setCount(0);
+                        window.location.href = "{% url 'apply_promotion' %}";
+                    }
+                });
+                {% endif %}
+            })();
+        </script>
+
+    <script>
+        // 获取当前用户角色
+        const USER_ROLE = "{{ student.role }}"; // 'user' 或 'manager'
+        
+        // 使用 Set 存储选中的座位坐标 'r-c'
+        let selectedSeats = new Set();
+
+        // 1. URL 参数更新 (切换教室/日期时用)
+        function updateParam(key, value) {
+            let url = new URL(window.location.href);
+            url.searchParams.set(key, value);
+            window.location.href = url.toString();
+        }
+
+        // 2. 点击座位逻辑
+        function toggleSeat(r, c) {
+            const key = `${r}-${c}`;
+            const el = document.getElementById(`seat-${key}`);
+
+            if (selectedSeats.has(key)) {
+                // 如果已选，点击取消
+                selectedSeats.delete(key);
+                el.classList.remove('selected');
+            } else {
+                // 如果是【普通用户】，且已经选了一个，先取消旧的
+                if (USER_ROLE === 'user' && selectedSeats.size >= 1) {
+                    const oldKey = selectedSeats.values().next().value;
+                    const oldEl = document.getElementById(`seat-${oldKey}`);
+                    if (oldEl) oldEl.classList.remove('selected');
+                    selectedSeats.clear();
+                }
+                
+                // 选中新的
+                selectedSeats.add(key);
+                el.classList.add('selected');
+            }
+            
+            updateUI();
+        }
+
+        // 3. 更新 UI (底部栏)
+        function updateUI() {
+            const count = selectedSeats.size;
+            const textEl = document.getElementById('status-text');
+            const btnEl = document.getElementById('submit-btn');
+
+            if (count === 0) {
+                textEl.innerText = "请选择座位";
+                btnEl.disabled = true;
+                btnEl.innerText = "提交申请";
+            } else {
+                textEl.innerText = `已选 ${count} 个座位`;
+                btnEl.disabled = false;
+                btnEl.innerText = `确认预约 (${count})`;
+            }
+        }
+
+        // 4. 提交逻辑
+        function submitBooking() {
+            if (selectedSeats.size === 0) return;
+
+            const seatsArr = Array.from(selectedSeats);
+            // 简单的客户端校验
+            if (USER_ROLE === 'user' && seatsArr.length > 1) {
+                alert("普通用户每次只能预约 1 个座位！");
+                return;
+            }
+
+            if (confirm(`确认申请预约这 ${seatsArr.length} 个座位吗？`)) {
+                // 将 Set 转为字符串 "0-1,0-2" 填入隐藏表单
+                document.getElementById('seatsInput').value = seatsArr.join(',');
+                document.getElementById('bookForm').submit();
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>登录 - 智能预约系统</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; margin: 0;}
+        .login-card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 350px; text-align: center;}
+        input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+        .btn { width: 96%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-link { background: none; color: #666; font-size: 12px; text-decoration: underline; margin-top: 15px; display: inline-block;}
+        
+        .msg { padding: 10px; border-radius: 5px; margin-bottom: 10px; font-size: 14px; text-align: left;}
+        .msg.error { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2;}
+        .msg.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9;}
+        .msg.info { background: #e3f2fd; color: #0d47a1; border: 1px solid #bbdefb;}
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h2>👋 欢迎预约</h2>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="msg {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="POST">
+            {% csrf_token %}
+            <input type="text" name="student_id" placeholder="请输入学号" required>
+            <input type="password" name="password" placeholder="请输入密码" required>
+            <button type="submit" class="btn btn-primary">登录 / 注册</button>
+        </form>
+        
+        <a href="{% url 'reset_request' %}" class="btn-link">忘记密码?通过邮箱重置</a>
+    </div>
+</body>
+</html>

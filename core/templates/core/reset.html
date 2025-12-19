@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>更正账号信息</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; margin: 0;}
+        .card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 350px; text-align: center;}
+        input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+        .btn-warning { background: #FF9800; color: white; width: 96%; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 10px;}
+        .back-link { display: block; margin-top: 15px; color: #666; text-decoration: none; font-size: 14px;}
+        .hint { font-size: 12px; color: #666; text-align: left; margin-bottom: 15px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h3>🛠 密码重置</h3>
+        
+        <p class="hint">
+            如果您忘记了登录密码，请在此处输入您的学号和新的登录密码。系统会发送确认邮件，验证通过后将替您重置密码。
+        </p>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div style="color:red; font-size:14px; margin-bottom:10px;">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        
+        <form method="POST">
+            {% csrf_token %}
+            <input type="text" name="student_id" placeholder="请输入学号 (例如 2023001)" required>
+            <input type="password" name="new_password" placeholder="请输入新密码" required>
+            <button type="submit" class="btn-warning">发送重置邮件</button>
+        </form>
+        
+        <a href="{% url 'index' %}" class="back-link">返回登录</a>
+    </div>
+</body>
+</html>
