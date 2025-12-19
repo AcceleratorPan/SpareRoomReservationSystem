@@ -149,6 +149,9 @@ source venv/bin/activate  # macOS/Linux
 pip install django
 
 # 4. 数据库迁移
+rm -rf core/migrations
+mkdir core/migrations
+touch core/migrations/__init__.py
 python manage.py makemigrations
 python manage.py migrate
 

@@ -90,7 +90,7 @@ def reset_request(request):
         new_password = request.POST.get('new_password') # 获取用户想要设置的新密码
         
         if not sid or not new_password:
-            messages.error(request, "请输入学号和新密码")
+            messages.error(request, "请输入学号（u20xxxxxxx）和新密码")
             return render(request, 'core/reset.html')
 
         try:
