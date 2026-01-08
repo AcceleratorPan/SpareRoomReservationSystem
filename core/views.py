@@ -27,6 +27,20 @@ def generate_action_url(id_val, action, type_code='res'):
     token = signer.sign(data)
     return f"{settings.SITE_DOMAIN}/admin-action/{token}/"
 
+def enforce_not_blacklisted(request, student, next_url=None):
+    if student.status != 'blacklist':
+        return None
+    try:
+        request.session.flush()
+    except Exception:
+        pass
+    message = "❌ 您已被列入黑名单，无法执行该操作。"
+    if not next_url:
+        next_url = reverse('index')
+    return redirect(
+        f"{reverse('info')}?msg={urllib.parse.quote_plus(message)}&next={urllib.parse.quote_plus(next_url)}&type=error"
+    )
+
 # --- 1. 首页 & 登录 ---
 def index(request):
     if request.method == 'POST':
@@ -167,6 +181,9 @@ def booking_view(request):
     sid = request.session.get('sid')
     if not sid: return redirect('index')
     student = Student.objects.get(id=sid)
+    blacklist_response = enforce_not_blacklisted(request, student)
+    if blacklist_response:
+        return blacklist_response
     
     cls_id = request.GET.get('classroom_id')
     date_str = request.GET.get('date', datetime.date.today().strftime('%Y-%m-%d'))
@@ -310,7 +327,16 @@ def submit(request):
     if request.method == 'POST':
         try:
             sid = request.session.get('sid')
+            if not sid:
+                return redirect('index')
             student = Student.objects.get(id=sid)
+            blacklist_response = enforce_not_blacklisted(
+                request,
+                student,
+                request.META.get('HTTP_REFERER', reverse('booking'))
+            )
+            if blacklist_response:
+                return blacklist_response
             
             cid = request.POST.get('cid')
             date_str = request.POST.get('date')
@@ -1250,6 +1276,13 @@ def cancel_booking(request, batch_id):
         return redirect('my_bookings')
 
     student = Student.objects.get(id=sid)
+    blacklist_response = enforce_not_blacklisted(
+        request,
+        student,
+        request.META.get('HTTP_REFERER', reverse('my_bookings'))
+    )
+    if blacklist_response:
+        return blacklist_response
     
     # 获取取消截止时间配置
     cancel_deadline_minutes = getattr(settings, 'RESERVATION_BOOKING_WINDOW_MINUTES', 30)
