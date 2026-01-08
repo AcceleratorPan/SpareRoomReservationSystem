@@ -149,7 +149,7 @@ def reset_confirm(request, token):
         # 验证签名 (有效期10分钟)
         data = signer.unsign(token, max_age=600)
         
-        # 解析数据：只分割前两个冒号，剩下的都是名字
+        # 解析数据：只分割前两个冒号，剩下的都是新密码
         parts = data.split(':', 2)
         if len(parts) != 3:
             raise BadSignature()
