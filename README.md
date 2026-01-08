@@ -72,7 +72,7 @@
 ## 系统架构
 
 ```
-RoomReservationSystem/v2/
+SpareRoomReservationSystem/
 ├── config/                 # Django 项目配置
 │   ├── settings.py         # 主配置文件
 │   ├── urls.py             # URL 路由
@@ -138,7 +138,7 @@ AccessCode (门禁密码)
 
 ```bash
 # 1. 克隆/进入项目目录
-cd RoomReservationSystem/v2
+cd SpareRoomReservationSystem
 
 # 2. 创建虚拟环境（推荐）
 python -m venv venv
